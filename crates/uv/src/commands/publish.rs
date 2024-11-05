@@ -8,17 +8,19 @@ use std::fmt::Write;
 use std::iter;
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::info;
+use tracing::{debug, info};
 use url::Url;
 use uv_cache::Cache;
 use uv_client::{
-    AuthIntegration, BaseClientBuilder, Connectivity, RegistryClientBuilder, DEFAULT_RETRIES,
+    AuthIntegration, BaseClient, BaseClientBuilder, Connectivity, RegistryClientBuilder,
+    DEFAULT_RETRIES,
 };
 use uv_configuration::{KeyringProviderType, TrustedHost, TrustedPublishing};
 use uv_distribution_types::{Index, IndexCapabilities, IndexLocations, IndexUrl};
 use uv_publish::{
     check_trusted_publishing, files_for_publishing, upload, CheckUrlClient, TrustedPublishResult,
 };
+use uv_warnings::warn_user_once;
 
 pub(crate) async fn publish(
     paths: Vec<String>,
@@ -70,7 +72,7 @@ pub(crate) async fn publish(
         .wrap_existing(&upload_client);
 
     // Initialize the registry client.
-    let check_url_client = if let Some(index_url) = check_url {
+    let check_url_client = if let Some(index_url) = &check_url {
         let index_urls = IndexLocations::new(
             vec![Index::from_index_url(index_url.clone())],
             Vec::new(),
@@ -84,7 +86,7 @@ pub(crate) async fn publish(
             .keyring(keyring_provider)
             .allow_insecure_host(allow_insecure_host.to_vec());
         Some(CheckUrlClient {
-            index_url,
+            index_url: index_url.clone(),
             registry_client_builder,
             client: &upload_client,
             index_capabilities: IndexCapabilities::default(),
@@ -94,18 +96,84 @@ pub(crate) async fn publish(
         None
     };
 
+    let (username, password) = collect_credentials(
+        &publish_url,
+        trusted_publishing,
+        keyring_provider,
+        username,
+        password,
+        check_url,
+        printer,
+        &oidc_client,
+    )
+    .await?;
+
+    for (file, raw_filename, filename) in files {
+        if let Some(check_url_client) = &check_url_client {
+            if uv_publish::check_url(check_url_client, &file, &filename).await? {
+                writeln!(printer.stderr(), "File {filename} already exists, skipping")?;
+                continue;
+            }
+        }
+
+        let size = fs_err::metadata(&file)?.len();
+        let (bytes, unit) = human_readable_bytes(size);
+        writeln!(
+            printer.stderr(),
+            "{} {filename} {}",
+            "Uploading".bold().green(),
+            format!("({bytes:.1}{unit})").dimmed()
+        )?;
+        let reporter = PublishReporter::single(printer);
+        let uploaded = upload(
+            &file,
+            &raw_filename,
+            &filename,
+            &publish_url,
+            &upload_client,
+            DEFAULT_RETRIES,
+            username.as_deref(),
+            password.as_deref(),
+            check_url_client.as_ref(),
+            // Needs to be an `Arc` because the reqwest `Body` static lifetime requirement
+            Arc::new(reporter),
+        )
+        .await?; // Filename and/or URL are already attached, if applicable.
+        info!("Upload succeeded");
+        if !uploaded {
+            writeln!(
+                printer.stderr(),
+                "{}",
+                "File already exists, skipping".dimmed()
+            )?;
+        }
+    }
+
+    Ok(ExitStatus::Success)
+}
+
+async fn collect_credentials(
+    publish_url: &Url,
+    trusted_publishing: TrustedPublishing,
+    keyring_provider: KeyringProviderType,
+    username: Option<String>,
+    password: Option<String>,
+    check_url: Option<IndexUrl>,
+    printer: Printer,
+    oidc_client: &BaseClient,
+) -> Result<(Option<String>, Option<String>)> {
     // If applicable, attempt obtaining a token for trusted publishing.
     let trusted_publishing_token = check_trusted_publishing(
         username.as_deref(),
         password.as_deref(),
         keyring_provider,
         trusted_publishing,
-        &publish_url,
-        &oidc_client,
+        publish_url,
+        oidc_client,
     )
     .await?;
 
-    let (username, password) =
+    let (username, mut password) =
         if let TrustedPublishResult::Configured(password) = &trusted_publishing_token {
             (Some("__token__".to_string()), Some(password.to_string()))
         } else {
@@ -153,48 +221,34 @@ pub(crate) async fn publish(
         }
     }
 
-    for (file, raw_filename, filename) in files {
-        if let Some(check_url_client) = &check_url_client {
-            if uv_publish::check_url(check_url_client, &file, &filename).await? {
-                writeln!(printer.stderr(), "File {filename} already exists, skipping")?;
-                continue;
+    // If applicable, fetch the password from the keyring eagerly to avoid user confusion about
+    // missing keyring entries later.
+    if let Some(keyring_provider) = keyring_provider.to_provider() {
+        if password.is_none() {
+            if let Some(username) = &username {
+                debug!("Fetching password from keyring");
+                if let Some(keyring_password) = keyring_provider
+                    .fetch(publish_url, username)
+                    .await
+                    .as_ref()
+                    .and_then(|credentials| credentials.password())
+                {
+                    password = Some(keyring_password.to_string());
+                } else {
+                    warn_user_once!(
+                        "Keyring has no password for URL `{publish_url}` and username `{username}`"
+                    );
+                }
             }
-        }
-
-        let size = fs_err::metadata(&file)?.len();
-        let (bytes, unit) = human_readable_bytes(size);
-        writeln!(
-            printer.stderr(),
-            "{} {filename} {}",
-            "Uploading".bold().green(),
-            format!("({bytes:.1}{unit})").dimmed()
-        )?;
-        let reporter = PublishReporter::single(printer);
-        let uploaded = upload(
-            &file,
-            &raw_filename,
-            &filename,
-            &publish_url,
-            &upload_client,
-            DEFAULT_RETRIES,
-            username.as_deref(),
-            password.as_deref(),
-            check_url_client.as_ref(),
-            // Needs to be an `Arc` because the reqwest `Body` static lifetime requirement
-            Arc::new(reporter),
-        )
-        .await?; // Filename and/or URL are already attached, if applicable.
-        info!("Upload succeeded");
-        if !uploaded {
-            writeln!(
-                printer.stderr(),
-                "{}",
-                "File already exists, skipping".dimmed()
-            )?;
+        } else if check_url.is_none() {
+            warn_user_once!(
+                "Using `--keyring-provider` with a password or token and no check url has no effect"
+            );
+        } else {
+            // We may be using the keyring for the simple index.
         }
     }
-
-    Ok(ExitStatus::Success)
+    Ok((username, password))
 }
 
 fn prompt_username_and_password() -> Result<(Option<String>, Option<String>)> {
