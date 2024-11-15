@@ -3,6 +3,7 @@ use assert_cmd::assert::OutputAssertExt;
 use assert_fs::fixture::{FileTouch, PathChild};
 use std::io::Write;
 use std::process::{Command, Stdio};
+use std::{env, iter};
 use uv_static::EnvVars;
 
 #[test]
@@ -308,7 +309,9 @@ fn check_keyring_behaviours() {
     "###
     );
 
-    let mut child = Command::new("keyring")
+    let mut child = Command::new(context.interpreter())
+        .arg("-m")
+        .arg("keyring")
         .arg("set")
         .arg("https://test.pypi.org/legacy/?ok")
         .arg("dummy")
@@ -335,6 +338,11 @@ fn check_keyring_behaviours() {
 
     // Ok: There is a keyring entry for the user dummy.
     // https://github.com/astral-sh/uv/issues/7963#issuecomment-2453558043
+    let path_with_venv = env::join_paths(
+        iter::once(context.interpreter().parent().unwrap().to_path_buf())
+            .chain(env::split_paths(&env::var_os("PATH").unwrap())),
+    )
+    .unwrap();
     uv_snapshot!(context.filters(), context.publish()
         .arg("-u")
         .arg("dummy")
@@ -350,7 +358,8 @@ fn check_keyring_behaviours() {
         )
         // Configure keyring file location
         .env("XDG_DATA_HOME", context.temp_dir.path())
-        .env("LOCALAPPDATA", context.temp_dir.path()), @r###"
+        .env("LOCALAPPDATA", context.temp_dir.path())
+        .env("PATH", path_with_venv), @r###"
     success: false
     exit_code: 2
     ----- stdout -----
