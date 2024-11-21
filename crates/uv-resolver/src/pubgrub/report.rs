@@ -1057,7 +1057,7 @@ impl std::fmt::Display for PubGrubHint {
             Self::PrereleaseAvailable { package, version } => {
                 write!(
                     f,
-                    "{}{} Pre-releases are available for {} in the requested range (e.g., {}), but pre-releases weren't enabled (try: `{}`)",
+                    "{}{} Pre-releases are available for `{}` in the requested range (e.g., {}), but pre-releases weren't enabled (try: `{}`)",
                     "hint".bold().cyan(),
                     ":".bold(),
                     package.bold(),
@@ -1068,7 +1068,7 @@ impl std::fmt::Display for PubGrubHint {
             Self::PrereleaseRequested { package, range } => {
                 write!(
                     f,
-                    "{}{} {} was requested with a pre-release marker (e.g., {}), but pre-releases weren't enabled (try: `{}`)",
+                    "{}{} `{}` was requested with a pre-release marker (e.g., {}), but pre-releases weren't enabled (try: `{}`)",
                     "hint".bold().cyan(),
                     ":".bold(),
                     package.bold(),
@@ -1096,7 +1096,7 @@ impl std::fmt::Display for PubGrubHint {
             Self::MissingPackageMetadata { package } => {
                 write!(
                     f,
-                    "{}{} Metadata for {} could not be found, as the wheel is missing a `METADATA` file",
+                    "{}{} Metadata for `{}` could not be found, as the wheel is missing a `METADATA` file",
                     "hint".bold().cyan(),
                     ":".bold(),
                     package.bold()
@@ -1105,7 +1105,7 @@ impl std::fmt::Display for PubGrubHint {
             Self::InvalidPackageMetadata { package, reason } => {
                 write!(
                     f,
-                    "{}{} Metadata for {} could not be parsed:\n{}",
+                    "{}{} Metadata for `{}` could not be parsed:\n{}",
                     "hint".bold().cyan(),
                     ":".bold(),
                     package.bold(),
@@ -1115,7 +1115,7 @@ impl std::fmt::Display for PubGrubHint {
             Self::InvalidPackageStructure { package, reason } => {
                 write!(
                     f,
-                    "{}{} The structure of {} was invalid:\n{}",
+                    "{}{} The structure of `{}` was invalid:\n{}",
                     "hint".bold().cyan(),
                     ":".bold(),
                     package.bold(),
@@ -1125,11 +1125,10 @@ impl std::fmt::Display for PubGrubHint {
             Self::MissingVersionMetadata { package, version } => {
                 write!(
                     f,
-                    "{}{} Metadata for {}=={} could not be found, as the wheel is missing a `METADATA` file",
+                    "{}{} Metadata for `{}` could not be found, as the wheel is missing a `METADATA` file",
                     "hint".bold().cyan(),
                     ":".bold(),
-                    package.bold(),
-                    version.bold(),
+                    format!("{package} v{version}").bold(),
                 )
             }
             Self::InvalidVersionMetadata {
@@ -1139,11 +1138,10 @@ impl std::fmt::Display for PubGrubHint {
             } => {
                 write!(
                     f,
-                    "{}{} Metadata for {}=={} could not be parsed:\n{}",
+                    "{}{} Metadata for `{}` could not be parsed:\n{}",
                     "hint".bold().cyan(),
                     ":".bold(),
-                    package.bold(),
-                    version.bold(),
+                    format!("{package} v{version}").bold(),
                     textwrap::indent(reason, "  ")
                 )
             }
@@ -1154,11 +1152,10 @@ impl std::fmt::Display for PubGrubHint {
             } => {
                 write!(
                     f,
-                    "{}{} The structure of {}=={} was invalid:\n{}",
+                    "{}{} The structure of `{}` was invalid:\n{}",
                     "hint".bold().cyan(),
                     ":".bold(),
-                    package.bold(),
-                    version.bold(),
+                    format!("{package} v{version}").bold(),
                     textwrap::indent(reason, "  ")
                 )
             }
@@ -1169,11 +1166,10 @@ impl std::fmt::Display for PubGrubHint {
             } => {
                 write!(
                     f,
-                    "{}{} Metadata for {}=={} was inconsistent:\n{}",
+                    "{}{} Metadata for `{}` was inconsistent:\n{}",
                     "hint".bold().cyan(),
                     ":".bold(),
-                    package.bold(),
-                    version.bold(),
+                    format!("{package} v{version}").bold(),
                     textwrap::indent(reason, "  ")
                 )
             }
@@ -1220,11 +1216,10 @@ impl std::fmt::Display for PubGrubHint {
             } => {
                 write!(
                     f,
-                    "{}{} The source distribution for {}=={} does not include static metadata. Generating metadata for this package requires Python {}, but Python {} is installed.",
+                    "{}{} The source distribution for `{}` does not include static metadata. Generating metadata for this package requires Python {}, but Python {} is installed.",
                     "hint".bold().cyan(),
                     ":".bold(),
-                    package.bold(),
-                    version.bold(),
+                    format!("{package} v{version}").bold(),
                     requires_python.bold(),
                     python_version.bold(),
                 )
