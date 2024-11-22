@@ -68,6 +68,8 @@ plugins:
       redirect_maps:
         "concepts/workspaces.md": "concepts/projects/workspaces.md"
         "concepts/dependencies.md": "concepts/projects/dependencies.md"
+        "reference/versioning.md": "reference/policies/versioning.md"
+        "reference/platforms.md": "reference/policies/platforms.md"
 extra_css:
   - stylesheets/extra.css
 extra_javascript:
@@ -149,8 +151,11 @@ nav:
       - Resolver: reference/resolver-internals.md
       - Dependency specifiers: reference/dependency-specifiers.md
       - Benchmarks: reference/benchmarks.md
-      - Versioning: reference/versioning.md
-      - Platform support: reference/platforms.md
+      - Policies:
+        - reference/policies/index.md
+        - Versioning: reference/policies/versioning.md
+        - Platform support: reference/policies/platforms.md
+        - License: reference/policies/license.md
 validation:
   omitted_files: warn
   absolute_links: warn
