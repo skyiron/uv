@@ -3479,7 +3479,7 @@ uv tool upgrade [OPTIONS] <NAME>...
 
 <h3 class="cli-reference">Arguments</h3>
 
-<dl class="cli-reference"><dt><code>NAME</code></dt><dd><p>The name of the tool to upgrade</p>
+<dl class="cli-reference"><dt><code>NAME</code></dt><dd><p>The name of the tool to upgrade, along with an optional version specifier to constrain the upgrade (e.g., <code>ruff</code> or <code>ruff&lt;0.8.0</code>)</p>
 
 </dd></dl>
 
